@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flag Quiz</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #e2e8f0;
+            padding: 20px;
+        }
+        .screen { display: none; width: 100%; max-width: 560px; }
+        .screen.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+        .card {
+            background: #1e293b;
+            border-radius: 20px;
+            padding: 36px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            border: 1px solid #334155;
+        }
+
+        h1 { font-size: 32px; font-weight: 800; text-align: center; letter-spacing: -0.5px; }
+        h1 span { color: #19A96E; }
+        .subtitle { text-align: center; color: #94a3b8; margin-top: 6px; font-size: 15px; }
+
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 14px 32px; border: none; border-radius: 12px; font-size: 16px;
+            font-weight: 600; cursor: pointer; transition: all 0.2s;
+            text-decoration: none; width: 100%;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn-primary { background: #19A96E; color: white; }
+        .btn-primary:hover { background: #148A5B; }
+        .btn-secondary { background: #334155; color: #e2e8f0; }
+        .btn-secondary:hover { background: #475569; }
+        .btn-success { background: #19A96E; color: white; }
+        .btn-success:hover { background: #148A5B; }
+        .btn-skip {
+            background: transparent; color: #94a3b8; border: 1px solid #475569;
+            padding: 8px 20px; font-size: 14px; width: auto;
+        }
+        .btn-skip:hover { background: #334155; color: #e2e8f0; }
+
+        .play-btn { padding: 18px 32px; font-size: 20px; border-radius: 16px; margin-top: 28px; }
+
+        .leaderboard { margin-top: 28px; }
+        .leaderboard h2 { font-size: 16px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+        .lb-table { width: 100%; border-collapse: collapse; }
+        .lb-table th { text-align: left; font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 6px; border-bottom: 1px solid #334155; }
+        .lb-table td { padding: 10px 6px; font-size: 14px; border-bottom: 1px solid #1e293b; }
+        .lb-table tr:last-child td { border-bottom: none; }
+        .lb-table .rank { color: #64748b; width: 32px; font-weight: 600; }
+        .lb-table .rank-1 { color: #fbbf24; }
+        .lb-table .rank-2 { color: #94a3b8; }
+        .lb-table .rank-3 { color: #d97706; }
+        .lb-empty { text-align: center; padding: 24px; color: #64748b; font-size: 14px; }
+
+        .quiz-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;
+        }
+        .timer { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: #fbbf24; font-family: 'SF Mono', 'Cascadia Code', monospace; }
+        .progress { font-size: 14px; color: #94a3b8; font-weight: 500; }
+
+        .flag-container {
+            display: flex; justify-content: center; margin-bottom: 28px;
+        }
+        .flag-container img {
+            width: 100%; max-width: 300px; border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            border: 1px solid #334155;
+            aspect-ratio: 3/2; object-fit: cover;
+            background: #0f172a;
+        }
+
+        .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .option {
+            padding: 14px 16px; border: 2px solid #334155; border-radius: 12px;
+            background: #0f172a; color: #e2e8f0; font-size: 14px; font-weight: 500;
+            cursor: pointer; transition: all 0.15s; text-align: center;
+        }
+        .option:hover:not(.disabled) { border-color: #64748b; background: #1e293b; }
+        .option.correct { border-color: #19A96E; background: #0d3b28; color: #6ee7b7; }
+        .option.wrong { border-color: #ef4444; background: #450a0a; color: #fca5a5; }
+        .option.disabled { cursor: default; opacity: 0.7; pointer-events: none; }
+        .option.reveal-correct { border-color: #19A96E; background: #0d3b28; color: #6ee7b7; }
+
+        .quiz-actions { display: flex; justify-content: center; margin-top: 16px; }
+        .btn-surrender {
+            background: transparent; color: #64748b; border: none;
+            padding: 6px 12px; font-size: 12px; cursor: pointer; width: auto;
+            margin-top: 12px; transition: color 0.2s;
+        }
+        .btn-surrender:hover { color: #ef4444; }
+
+        .results-stats { text-align: center; margin: 20px 0; }
+        .results-stats .score { font-size: 56px; font-weight: 800; color: #19A96E; line-height: 1; }
+        .results-stats .score-label { font-size: 14px; color: #94a3b8; margin-top: 4px; }
+        .results-stats .time { font-size: 24px; font-weight: 700; margin-top: 8px; color: #fbbf24; }
+        .results-stats .time-label { font-size: 13px; color: #94a3b8; }
+
+        .results-detail { margin: 20px 0; max-height: 200px; overflow-y: auto; }
+        .results-detail::-webkit-scrollbar { width: 4px; }
+        .results-detail::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        .result-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 8px 10px; border-radius: 8px; margin-bottom: 4px;
+            font-size: 13px;
+        }
+        .result-item.correct { background: #0d3b28; }
+        .result-item.wrong { background: #450a0a; }
+        .result-item img { width: 32px; border-radius: 3px; aspect-ratio: 3/2; object-fit: cover; border: 1px solid #334155; }
+        .result-item .country-name { flex: 1; }
+        .result-item .badge { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+        .badge-correct { background: #19A96E; color: white; }
+        .badge-wrong { background: #ef4444; color: white; }
+
+        .name-input-group { display: flex; gap: 10px; margin-top: 20px; }
+        .name-input-group input {
+            flex: 1; padding: 12px 16px; border-radius: 12px; border: 2px solid #334155;
+            background: #0f172a; color: #e2e8f0; font-size: 15px; outline: none;
+            transition: border-color 0.2s;
+        }
+        .name-input-group input:focus { border-color: #19A96E; }
+        .name-input-group input::placeholder { color: #475569; }
+        .name-input-group .btn { width: auto; padding: 12px 24px; }
+
+        .results-actions { margin-top: 12px; }
+        .results-actions .btn + .btn { margin-top: 8px; }
+
+
+
+        .hidden { display: none !important; }
+
+        @media (max-width: 480px) {
+            .card { padding: 24px 20px; border-radius: 16px; }
+            h1 { font-size: 26px; }
+            .options { grid-template-columns: 1fr; }
+            .option { padding: 12px 14px; font-size: 13px; }
+            .results-stats .score { font-size: 44px; }
+            .name-input-group { flex-direction: column; }
+            .name-input-group .btn { width: 100%; }
+        }
+    </style>
+    <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<div id="home" class="screen active">
+    <div class="card">
+        <h1>FLAG <span>QUIZ</span></h1>
+        <p class="subtitle">Test your knowledge of world flags</p>
+
+        <button class="btn btn-primary play-btn" onclick="startGame()">PLAY</button>
+
+        <div class="leaderboard">
+            <h2>Leaderboard</h2>
+            <div id="lbContent"></div>
+        </div>
+    </div>
+</div>
+
+<div id="quiz" class="screen">
+    <div class="card">
+        <div class="quiz-header">
+            <div class="timer" id="timerDisplay">00:00</div>
+            <div class="progress" id="progressDisplay">1 / 20</div>
+            <button class="btn btn-skip" onclick="skipFlag()">Skip</button>
+        </div>
+
+        <div class="flag-container">
+            <img id="flagImage" src="" alt="Flag">
+        </div>
+
+        <div class="options" id="optionsContainer"></div>
+
+        <div style="display:flex;justify-content:center">
+            <button class="btn btn-surrender" onclick="surrender()">Surrender</button>
+        </div>
+    </div>
+</div>
+
+<div id="results" class="screen">
+    <div class="card">
+        <div class="results-stats">
+            <div class="score" id="finalScore">0</div>
+            <div class="score-label">out of 20 correct</div>
+            <div class="time" id="finalTime">00:00</div>
+            <div class="time-label">total time</div>
+        </div>
+
+        <div class="results-detail" id="resultsDetail"></div>
+
+        <div class="name-input-group">
+            <input type="text" id="nameInput" placeholder="Enter your name" maxlength="20" autocomplete="off">
+            <button class="btn btn-success" onclick="saveScore()">Save</button>
+        </div>
+
+        <div class="results-actions">
+            <button class="btn btn-primary" onclick="startGame()" style="margin-top:12px">Play Again</button>
+            <button class="btn btn-secondary" onclick="goHome()" style="margin-top:8px">Back to Home</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const TOTAL_FLAGS = 20;
+
+    // ── Supabase (set up at https://supabase.com) ──────────────────────────
+    // After creating a project, get these from Project Settings → API
+    const SUPABASE_URL = '';
+    const SUPABASE_ANON_KEY = '';
+
+    const sb = SUPABASE_URL && SUPABASE_ANON_KEY
+        ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+        : null;
+
+    // ── State ──────────────────────────────────────────────────────────────
+    let state = {
+        countries: [],
+        quiz: [],
+        currentIndex: 0,
+        correctCount: 0,
+        wrongList: [],
+        timerInterval: null,
+        elapsedSeconds: 0,
+        isAnswered: false,
+        answeredCount: 0,
+        gameDone: false,
+        savedName: '',
+        moves: 0
+    };
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function $(id) { return document.getElementById(id); }
+
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        $(id).classList.add('active');
+    }
+
+    function formatTime(sec) {
+        const m = String(Math.floor(sec / 60)).padStart(2, '0');
+        const s = String(sec % 60).padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // ── Weekly reset ───────────────────────────────────────────────────────
+    function getWeekStart() {
+        const d = new Date();
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        d.setDate(diff);
+        d.setHours(0, 0, 0, 0);
+        return d.toISOString();
+    }
+
+    // ── Leaderboard (Supabase + localStorage fallback) ─────────────────────
+    async function getLeaderboard() {
+        const weekStart = getWeekStart();
+        if (sb) {
+            const { data, error } = await sb
+                .from('scores')
+                .select('name, score, time')
+                .gte('created_at', weekStart)
+                .order('score', { ascending: false })
+                .order('time', { ascending: true })
+                .limit(10);
+            if (!error && data) return data;
+        }
+        try {
+            const all = JSON.parse(localStorage.getItem('flagQuizLB')) || [];
+            return all.filter(e => e.created_at && e.created_at >= weekStart);
+        } catch { return []; }
+    }
+
+    async function addScore(name, score, time) {
+        const entry = { name, score, time, created_at: new Date().toISOString() };
+        if (sb) {
+            const { error } = await sb
+                .from('scores')
+                .insert({ name, score, time });
+            if (error) console.error('Supabase insert error:', error);
+        }
+        try {
+            const lb = JSON.parse(localStorage.getItem('flagQuizLB')) || [];
+            lb.push(entry);
+            localStorage.setItem('flagQuizLB', JSON.stringify(lb));
+        } catch {}
+    }
+
+    async function renderLeaderboard() {
+        const lb = await getLeaderboard();
+        const container = $('lbContent');
+        if (lb.length === 0) {
+            container.innerHTML = '<div class="lb-empty">No scores yet. Be the first!</div>';
+            return;
+        }
+        const top = lb.sort((a, b) => b.score - a.score || a.time - b.time).slice(0, 10);
+        let html = `<table class="lb-table">
+            <thead><tr><th></th><th>Name</th><th>Score</th><th>Time</th></tr></thead><tbody>`;
+        top.forEach((entry, i) => {
+            const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+            const name = entry.name || 'Anonymous';
+            html += `<tr>
+                <td class="rank ${rankClass}">#${i + 1}</td>
+                <td>${escapeHtml(name)}</td>
+                <td>${entry.score}/${TOTAL_FLAGS}</td>
+                <td>${formatTime(entry.time)}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    const COUNTRIES = [
+        ["Afghanistan","AF"],["Albania","AL"],["Algeria","DZ"],["Andorra","AD"],["Angola","AO"],
+        ["Antigua and Barbuda","AG"],["Argentina","AR"],["Armenia","AM"],["Australia","AU"],["Austria","AT"],
+        ["Azerbaijan","AZ"],["Bahamas","BS"],["Bahrain","BH"],["Bangladesh","BD"],["Barbados","BB"],
+        ["Belarus","BY"],["Belgium","BE"],["Belize","BZ"],["Benin","BJ"],["Bhutan","BT"],
+        ["Bolivia","BO"],["Bosnia and Herzegovina","BA"],["Botswana","BW"],["Brazil","BR"],["Brunei","BN"],
+        ["Bulgaria","BG"],["Burkina Faso","BF"],["Burundi","BI"],["Cape Verde","CV"],["Cambodia","KH"],
+        ["Cameroon","CM"],["Canada","CA"],["Central African Republic","CF"],["Chad","TD"],["Chile","CL"],
+        ["China","CN"],["Colombia","CO"],["Comoros","KM"],["Congo","CG"],["Costa Rica","CR"],
+        ["Croatia","HR"],["Cuba","CU"],["Cyprus","CY"],["Czech Republic","CZ"],["Denmark","DK"],
+        ["Djibouti","DJ"],["Dominica","DM"],["Dominican Republic","DO"],["Ecuador","EC"],["Egypt","EG"],
+        ["El Salvador","SV"],["Equatorial Guinea","GQ"],["Eritrea","ER"],["Estonia","EE"],["Eswatini","SZ"],
+        ["Ethiopia","ET"],["Fiji","FJ"],["Finland","FI"],["France","FR"],["Gabon","GA"],
+        ["Gambia","GM"],["Georgia","GE"],["Germany","DE"],["Ghana","GH"],["Greece","GR"],
+        ["Grenada","GD"],["Guatemala","GT"],["Guinea","GN"],["Guinea-Bissau","GW"],["Guyana","GY"],
+        ["Haiti","HT"],["Honduras","HN"],["Hungary","HU"],["Iceland","IS"],["India","IN"],
+        ["Indonesia","ID"],["Iran","IR"],["Iraq","IQ"],["Ireland","IE"],["Israel","IL"],
+        ["Italy","IT"],["Ivory Coast","CI"],["Jamaica","JM"],["Japan","JP"],["Jordan","JO"],
+        ["Kazakhstan","KZ"],["Kenya","KE"],["Kiribati","KI"],["Kuwait","KW"],["Kyrgyzstan","KG"],
+        ["Laos","LA"],["Latvia","LV"],["Lebanon","LB"],["Lesotho","LS"],["Liberia","LR"],
+        ["Libya","LY"],["Liechtenstein","LI"],["Lithuania","LT"],["Luxembourg","LU"],["Madagascar","MG"],
+        ["Malawi","MW"],["Malaysia","MY"],["Maldives","MV"],["Mali","ML"],["Malta","MT"],
+        ["Marshall Islands","MH"],["Mauritania","MR"],["Mauritius","MU"],["Mexico","MX"],["Micronesia","FM"],
+        ["Moldova","MD"],["Monaco","MC"],["Mongolia","MN"],["Montenegro","ME"],["Morocco","MA"],
+        ["Mozambique","MZ"],["Myanmar","MM"],["Namibia","NA"],["Nauru","NR"],["Nepal","NP"],
+        ["Netherlands","NL"],["New Zealand","NZ"],["Nicaragua","NI"],["Niger","NE"],["Nigeria","NG"],
+        ["North Korea","KP"],["North Macedonia","MK"],["Norway","NO"],["Oman","OM"],["Pakistan","PK"],
+        ["Palau","PW"],["Panama","PA"],["Papua New Guinea","PG"],["Paraguay","PY"],["Peru","PE"],
+        ["Philippines","PH"],["Poland","PL"],["Portugal","PT"],["Qatar","QA"],["Romania","RO"],
+        ["Russia","RU"],["Rwanda","RW"],["Saint Kitts and Nevis","KN"],["Saint Lucia","LC"],
+        ["Saint Vincent and the Grenadines","VC"],["Samoa","WS"],["San Marino","SM"],
+        ["Sao Tome and Principe","ST"],["Saudi Arabia","SA"],["Senegal","SN"],["Serbia","RS"],
+        ["Seychelles","SC"],["Sierra Leone","SL"],["Singapore","SG"],["Slovakia","SK"],["Slovenia","SI"],
+        ["Solomon Islands","SB"],["Somalia","SO"],["South Africa","ZA"],["South Korea","KR"],
+        ["South Sudan","SS"],["Spain","ES"],["Sri Lanka","LK"],["Sudan","SD"],["Suriname","SR"],
+        ["Sweden","SE"],["Switzerland","CH"],["Syria","SY"],["Tajikistan","TJ"],["Tanzania","TZ"],
+        ["Thailand","TH"],["Timor-Leste","TL"],["Togo","TG"],["Tonga","TO"],["Trinidad and Tobago","TT"],
+        ["Tunisia","TN"],["Turkey","TR"],["Turkmenistan","TM"],["Tuvalu","TV"],["Uganda","UG"],
+        ["Ukraine","UA"],["United Arab Emirates","AE"],["United Kingdom","GB"],["United States","US"],
+        ["Uruguay","UY"],["Uzbekistan","UZ"],["Vanuatu","VU"],["Vatican City","VA"],["Venezuela","VE"],
+        ["Vietnam","VN"],["Yemen","YE"],["Zambia","ZM"],["Zimbabwe","ZW"]
+    ].map(c => ({ name: c[0], flag: `https://flagcdn.com/w320/${c[1].toLowerCase()}.png`, code: c[1] }));
+
+    function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    }
+
+    // Start game
+    function startGame() {
+        if (state.answeredCount > 0) {
+            addScore(state.savedName || 'Anonymous', state.correctCount, state.elapsedSeconds);
+        }
+
+        showScreen('quiz');
+        $('optionsContainer').innerHTML = '';
+        $('flagImage').src = '';
+
+        state.countries = COUNTRIES;
+        state.currentIndex = 0;
+        state.correctCount = 0;
+        state.wrongList = [];
+        state.isAnswered = false;
+        state.answeredCount = 0;
+        state.gameDone = false;
+        state.elapsedSeconds = 0;
+        state.moves = 0;
+
+        if (state.timerInterval) clearInterval(state.timerInterval);
+        state.timerInterval = setInterval(() => {
+            state.elapsedSeconds++;
+            $('timerDisplay').textContent = formatTime(state.elapsedSeconds);
+        }, 1000);
+        $('timerDisplay').textContent = '00:00';
+
+        const shuffled = shuffle([...state.countries]);
+        state.quiz = shuffled.slice(0, TOTAL_FLAGS).map(c => ({
+            ...c,
+            userAnswer: null,
+            options: []
+        }));
+
+        const pool = state.countries;
+        state.quiz.forEach(q => {
+            const wrongs = [];
+            const wrongPool = pool.filter(c => c.name !== q.name);
+            const shuffledPool = shuffle([...wrongPool]);
+            for (let i = 0; i < 3 && i < shuffledPool.length; i++) {
+                wrongs.push(shuffledPool[i].name);
+            }
+            const opts = shuffle([q.name, ...wrongs]);
+            q.options = opts;
+        });
+
+        state.quiz.slice(0, 5).forEach(q => preloadImage(q.flag));
+
+        loadQuestion();
+    }
+
+    function preloadImage(src) {
+        const img = new Image();
+        img.src = src;
+    }
+
+    function loadQuestion() {
+        if (state.answeredCount >= TOTAL_FLAGS) {
+            endGame();
+            return;
+        }
+
+        if (state.currentIndex >= state.quiz.length) {
+            state.currentIndex = 0;
+        }
+
+        const q = state.quiz[state.currentIndex];
+
+        if (q.userAnswer !== null) {
+            state.currentIndex++;
+            loadQuestion();
+            return;
+        }
+
+        state.isAnswered = false;
+
+        $('progressDisplay').textContent = `${state.answeredCount + 1} / ${TOTAL_FLAGS} answered`;
+        $('flagImage').src = q.flag;
+        $('flagImage').onerror = function() {
+            this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2"><rect fill="%23334155" width="3" height="2"/></svg>';
+        };
+
+        for (let i = 1; i <= 3; i++) {
+            const idx = (state.currentIndex + i) % state.quiz.length;
+            const f = state.quiz[idx];
+            if (f && f.userAnswer === null) preloadImage(f.flag);
+        }
+
+        const container = $('optionsContainer');
+        container.innerHTML = '';
+        q.options.forEach((opt, i) => {
+            const div = document.createElement('div');
+            div.className = 'option';
+            div.textContent = opt;
+            div.dataset.index = i;
+            div.addEventListener('click', () => selectAnswer(i));
+            container.appendChild(div);
+        });
+    }
+
+    function selectAnswer(index) {
+        if (state.isAnswered || state.gameDone) return;
+        state.isAnswered = true;
+
+        const q = state.quiz[state.currentIndex];
+        const opts = $('optionsContainer').querySelectorAll('.option');
+        const selected = opts[index];
+        const correct = q.name;
+
+        // Disable all options
+        opts.forEach(o => o.classList.add('disabled'));
+
+        if (opts[index].textContent === correct) {
+            selected.classList.add('correct');
+            q.userAnswer = correct;
+            state.correctCount++;
+            setTimeout(() => {
+                state.answeredCount++;
+                state.moves++;
+                state.currentIndex++;
+                loadQuestion();
+            }, 500);
+        } else {
+            selected.classList.add('wrong');
+            // Show correct answer
+            opts.forEach(o => {
+                if (o.textContent === correct) o.classList.add('reveal-correct');
+            });
+            q.userAnswer = opts[index].textContent;
+            state.wrongList.push({ name: q.name, flag: q.flag, userAnswer: opts[index].textContent });
+            setTimeout(() => {
+                state.answeredCount++;
+                state.moves++;
+                state.currentIndex++;
+                loadQuestion();
+            }, 1000);
+        }
+    }
+
+    function skipFlag() {
+        if (state.isAnswered || state.gameDone) return;
+        state.isAnswered = true;
+
+        const q = state.quiz[state.currentIndex];
+
+        state.quiz.splice(state.currentIndex, 1);
+        state.quiz.push(q);
+
+        if (state.quiz[state.currentIndex] === q) {
+            state.currentIndex++;
+            if (state.currentIndex >= state.quiz.length) {
+                state.currentIndex = 0;
+            }
+        }
+
+        const opts = $('optionsContainer').querySelectorAll('.option');
+        opts.forEach(o => o.classList.add('disabled'));
+
+        setTimeout(() => {
+            state.moves++;
+            loadQuestion();
+        }, 400);
+    }
+
+    function surrender() {
+        if (state.gameDone) return;
+        if (!confirm('Surrender? Your progress will be lost.')) return;
+        if (state.timerInterval) {
+            clearInterval(state.timerInterval);
+            state.timerInterval = null;
+        }
+        showScreen('home');
+        renderLeaderboard();
+    }
+
+    function endGame() {
+        state.gameDone = true;
+        if (state.timerInterval) {
+            clearInterval(state.timerInterval);
+            state.timerInterval = null;
+        }
+
+        showScreen('results');
+        $('finalScore').textContent = state.correctCount;
+        $('finalTime').textContent = formatTime(state.elapsedSeconds);
+
+        // Detail
+        let html = '';
+        state.wrongList.forEach(w => {
+            html += `<div class="result-item wrong">
+                <img src="${w.flag}" alt="" onerror="this.style.display='none'">
+                <span class="country-name">${escapeHtml(w.name)}</span>
+                <span class="badge badge-wrong">${escapeHtml(w.userAnswer)}</span>
+            </div>`;
+        });
+        state.quiz.forEach(q => {
+            if (q.userAnswer === q.name) {
+                html += `<div class="result-item correct">
+                    <img src="${q.flag}" alt="" onerror="this.style.display='none'">
+                    <span class="country-name">${escapeHtml(q.name)}</span>
+                    <span class="badge badge-correct">Correct</span>
+                </div>`;
+            }
+        });
+        $('resultsDetail').innerHTML = html || '<div style="text-align:center;color:#64748b;padding:16px;">Perfect score!</div>';
+
+        $('nameInput').value = '';
+        renderLeaderboard();
+    }
+
+    async function saveScore() {
+        const name = $('nameInput').value.trim() || 'Anonymous';
+        state.savedName = name;
+        await addScore(name, state.correctCount, state.elapsedSeconds);
+        renderLeaderboard();
+        $('nameInput').value = '';
+        alert('Score saved!');
+    }
+
+    function goHome() {
+        if (state.timerInterval) {
+            clearInterval(state.timerInterval);
+            state.timerInterval = null;
+        }
+        showScreen('home');
+        renderLeaderboard();
+    }
+
+    // Init
+    renderLeaderboard();
+</script>
+</body>
+</html>
