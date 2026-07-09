@@ -154,6 +154,7 @@
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="config.js"></script>
 </head>
 <body>
 
@@ -219,9 +220,9 @@
     const TOTAL_FLAGS = 20;
 
     // ── Supabase (set up at https://supabase.com) ──────────────────────────
-    // After creating a project, get these from Project Settings → API
-    const SUPABASE_URL = 'https://ymnkzpcjsfzbtfyuihub.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_SsVccIV5cgoEYyW_e4h8Mw_MkTHSNm6';
+    // Credentials loaded from config.js (see config.example.js for setup)
+    const SUPABASE_URL = window.SUPABASE_URL || '';
+    const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || '';
 
     const sb = (typeof supabase !== 'undefined' && SUPABASE_URL && SUPABASE_ANON_KEY)
         ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)

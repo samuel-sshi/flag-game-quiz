@@ -10,5 +10,5 @@ jobs:
     steps:
       - run: |
           curl -sS -o /dev/null \
-            -H "apikey: sb_publishable_SsVccIV5cgoEYyW_e4h8Mw_MkTHSNm6" \
-            "https://ymnkzpcjsfzbtfyuihub.supabase.co/rest/v1/scores?select=id&limit=1"
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/scores?select=id&limit=1"
