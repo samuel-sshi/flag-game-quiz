@@ -144,14 +144,47 @@
 
         .hidden { display: none !important; }
 
-        @media (max-width: 480px) {
-            .card { padding: 24px 20px; border-radius: 16px; }
-            h1 { font-size: 26px; }
-            .options { grid-template-columns: 1fr; }
-            .option { padding: 12px 14px; font-size: 13px; }
-            .results-stats .score { font-size: 44px; }
+        #lbContent { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+        @media (max-width: 600px) {
+            body { padding: 12px; }
+            .card { padding: 20px 16px; border-radius: 16px; }
+            h1 { font-size: 24px; }
+            .subtitle { font-size: 13px; }
+            .options { grid-template-columns: 1fr; gap: 8px; }
+            .option {
+                padding: 14px 14px; font-size: 14px; min-height: 48px;
+                display: flex; align-items: center; justify-content: center;
+            }
+            .results-stats .score { font-size: 40px; }
+            .results-stats .time { font-size: 20px; }
             .name-input-group { flex-direction: column; }
             .name-input-group .btn { width: 100%; }
+            .quiz-header { gap: 8px; }
+            .quiz-header .btn-skip { font-size: 13px; padding: 8px 14px; }
+            .timer { font-size: 17px; }
+            .progress { font-size: 13px; }
+            .btn-skip { padding: 8px 14px; font-size: 13px; }
+            .btn-surrender { font-size: 13px; padding: 8px 14px; }
+            .flag-container img { max-width: 100%; border-radius: 8px; }
+            .play-btn { font-size: 18px; padding: 16px 28px; }
+            .results-detail { max-height: 160px; }
+            .result-item { font-size: 12px; gap: 8px; padding: 6px 8px; }
+            .result-item img { width: 28px; }
+        }
+
+        @media (max-width: 380px) {
+            .card { padding: 16px 12px; }
+            h1 { font-size: 22px; }
+            .quiz-header { flex-wrap: wrap; }
+            .quiz-header > * { flex: 1 1 auto; text-align: center; }
+            .quiz-header .timer { flex: 0 0 auto; }
+            .option { padding: 12px 10px; font-size: 13px; min-height: 44px; }
+            .results-stats .score { font-size: 34px; }
+            .lb-table th, .lb-table td { padding: 6px 3px; font-size: 11px; }
+            .lb-table .lb-date { display: none; }
+            .name-input-group input { font-size: 14px; padding: 10px 14px; }
+            .btn { font-size: 14px; }
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
