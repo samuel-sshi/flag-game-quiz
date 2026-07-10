@@ -70,6 +70,30 @@
         .lb-countdown { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 12px; }
         .lb-countdown span { color: #fbbf24; font-weight: 600; font-variant-numeric: tabular-nums; }
 
+        .lb-week-selector {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 12px; gap: 8px;
+        }
+        .lb-week-selector select {
+            background: #0f172a; color: #e2e8f0; border: 1px solid #334155;
+            border-radius: 8px; padding: 6px 28px 6px 10px; font-size: 13px;
+            cursor: pointer; outline: none; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 8px center;
+            min-width: 180px;
+        }
+        @media (hover: hover) {
+            .lb-week-selector select:hover { border-color: #475569; }
+        }
+        .lb-week-selector select:focus { border-color: #19A96E; }
+        .lb-week-selector .lb-title {
+            font-size: 16px; font-weight: 700; color: #94a3b8;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .lb-week-selector .lb-week-range {
+            font-size: 12px; color: #64748b; font-weight: 400; text-transform: none; letter-spacing: 0;
+        }
+
         .quiz-header {
             display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;
         }
@@ -152,6 +176,34 @@
 
         #lbContent { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+        .lb-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+        .lb-pagination .page-info { font-size: 13px; color: #94a3b8; white-space: nowrap; min-width: 80px; text-align: center; }
+        .lb-pager { display: flex; align-items: center; gap: 8px; flex: 1; max-width: 280px; }
+        .lb-pager input[type="range"] {
+            flex: 1; -webkit-appearance: none; appearance: none;
+            height: 6px; background: #334155; border-radius: 3px; outline: none; cursor: pointer;
+            margin: 0;
+        }
+        .lb-pager input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 18px; height: 18px; border-radius: 50%; background: #19A96E;
+            border: 2px solid #1e293b; cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .lb-pager input[type="range"]::-moz-range-thumb {
+            width: 18px; height: 18px; border-radius: 50%; background: #19A96E;
+            border: 2px solid #1e293b; cursor: pointer;
+        }
+        .lb-page-btn {
+            background: #334155; color: #e2e8f0; border: none; border-radius: 8px;
+            padding: 6px 12px; font-size: 13px; cursor: pointer; transition: background 0.15s;
+            white-space: nowrap;
+        }
+        @media (hover: hover) {
+            .lb-page-btn:hover:not(:disabled) { background: #475569; }
+        }
+        .lb-page-btn:disabled { opacity: 0.4; cursor: default; }
+
         @media (max-width: 600px) {
             body { padding: 12px; }
             .card { padding: 20px 16px; border-radius: 16px; }
@@ -206,9 +258,13 @@
         <button class="btn btn-primary play-btn" onclick="startGame()">PLAY</button>
 
         <div class="leaderboard">
-            <h2>Leaderboard</h2>
+            <div class="lb-week-selector">
+                <span class="lb-title" id="lbTitle">LEADERBOARD</span>
+                <select id="lbWeekSelect" onchange="onWeekChange(this.value)"></select>
+            </div>
             <div class="lb-countdown" id="lbCountdown"></div>
             <div id="lbContent"></div>
+            <div class="lb-pagination" id="lbPagination"></div>
         </div>
     </div>
 </div>
@@ -245,7 +301,7 @@
         <div class="results-detail" id="resultsDetail"></div>
 
         <div class="name-input-group">
-            <input type="text" id="nameInput" placeholder="Enter your name" maxlength="20" autocomplete="off">
+            <input type="text" id="nameInput" placeholder="Enter a unique name" maxlength="20" autocomplete="off">
             <button class="btn btn-success" onclick="saveScore()">Save</button>
         </div>
 
@@ -270,6 +326,8 @@
 
     let countdownInterval = null;
 
+    const LB_PAGE_SIZE = 10;
+
     // ── State ──────────────────────────────────────────────────────────────
     let state = {
         countries: [],
@@ -283,7 +341,10 @@
         answeredCount: 0,
         gameDone: false,
         savedName: '',
-        moves: 0
+        moves: 0,
+        leaderboardPage: 1,
+        leaderboardData: [],
+        selectedWeek: null
     };
 
     // ── Helpers ────────────────────────────────────────────────────────────
@@ -323,12 +384,18 @@
     }
 
     // ── Weekly reset ───────────────────────────────────────────────────────
-    function getWeekStart() {
-        const d = new Date();
+    function getWeekStart(date) {
+        const d = date ? new Date(date) : new Date();
         const day = d.getDay();
         const diff = d.getDate() - day + (day === 0 ? -6 : 1);
         d.setDate(diff);
         d.setHours(0, 0, 0, 0);
+        return d.toISOString();
+    }
+
+    function getWeekEnd(weekStart) {
+        const d = new Date(weekStart);
+        d.setDate(d.getDate() + 7);
         return d.toISOString();
     }
 
@@ -338,9 +405,21 @@
         return ws;
     }
 
+    function formatWeekLabel(weekStart) {
+        const start = new Date(weekStart);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        const opts = { month: 'short', day: 'numeric' };
+        return start.toLocaleDateString(undefined, opts) + ' - ' + end.toLocaleDateString(undefined, opts);
+    }
+
     function updateCountdown() {
         const el = $('lbCountdown');
         if (!el) return;
+        if (state.selectedWeek) {
+            el.innerHTML = '';
+            return;
+        }
         const now = new Date();
         const next = getNextReset();
         const diff = next - now;
@@ -356,22 +435,29 @@
     }
 
     // ── Leaderboard (Supabase + localStorage fallback) ─────────────────────
-    async function getLeaderboard() {
-        const weekStart = getWeekStart();
+    async function getLeaderboard(weekStart) {
+        const ws = weekStart || getWeekStart();
+        const we = getWeekEnd(ws);
         if (sb) {
             const { data, error } = await sb
                 .from('scores')
                 .select('name, score, time, created_at')
-                .gte('created_at', weekStart)
+                .gte('created_at', ws)
+                .lt('created_at', we)
                 .order('score', { ascending: false })
                 .order('time', { ascending: true })
-                .limit(10);
+                .limit(1000);
             if (!error && data) return data;
         }
         try {
             const all = JSON.parse(localStorage.getItem('flagQuizLB')) || [];
-            return all.filter(e => e.created_at && e.created_at >= weekStart);
+            return all.filter(e => e.created_at && e.created_at >= ws && e.created_at < we);
         } catch { return []; }
+    }
+
+    async function isNameUnique(name) {
+        const lb = await getLeaderboard(getWeekStart());
+        return !lb.some(e => e.name && e.name.toLowerCase() === name.toLowerCase());
     }
 
     async function addScore(name, score, time) {
@@ -389,22 +475,32 @@
         } catch {}
     }
 
-    async function renderLeaderboard() {
-        updateCountdown();
-        const lb = await getLeaderboard();
+    function renderLeaderboardPage() {
         const container = $('lbContent');
-        if (lb.length === 0) {
+        const pag = $('lbPagination');
+        const data = state.leaderboardData;
+        const totalPages = Math.ceil(data.length / LB_PAGE_SIZE) || 1;
+
+        if (state.leaderboardPage > totalPages) state.leaderboardPage = totalPages;
+        if (state.leaderboardPage < 1) state.leaderboardPage = 1;
+
+        if (data.length === 0) {
             container.innerHTML = '<div class="lb-empty">No scores yet. Be the first!</div>';
+            pag.innerHTML = '';
             return;
         }
-        const top = lb.sort((a, b) => b.score - a.score || a.time - b.time).slice(0, 10);
+
+        const start = (state.leaderboardPage - 1) * LB_PAGE_SIZE;
+        const page = data.slice(start, start + LB_PAGE_SIZE);
+
         let html = `<table class="lb-table">
             <thead><tr><th></th><th>Name</th><th>Score</th><th>Time</th><th>Played</th></tr></thead><tbody>`;
-        top.forEach((entry, i) => {
-            const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+        page.forEach((entry, i) => {
+            const rank = start + i + 1;
+            const rankClass = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : '';
             const name = entry.name || 'Anonymous';
             html += `<tr>
-                <td class="rank ${rankClass}">#${i + 1}</td>
+                <td class="rank ${rankClass}">#${rank}</td>
                 <td>${escapeHtml(name)}</td>
                 <td>${entry.score}/${TOTAL_FLAGS}</td>
                 <td>${formatTime(entry.time)}</td>
@@ -413,6 +509,58 @@
         });
         html += '</tbody></table>';
         container.innerHTML = html;
+
+        if (totalPages <= 1) {
+            pag.innerHTML = '';
+            return;
+        }
+
+        pag.innerHTML = `
+            <button class="lb-page-btn" onclick="leaderboardGoPage(1)" ${state.leaderboardPage === 1 ? 'disabled' : ''}>&laquo; First</button>
+            <div class="lb-pager">
+                <span class="page-info">${state.leaderboardPage} / ${totalPages}</span>
+                <input type="range" min="1" max="${totalPages}" value="${state.leaderboardPage}" oninput="leaderboardGoPage(parseInt(this.value))">
+            </div>
+            <button class="lb-page-btn" onclick="leaderboardGoPage(${totalPages})" ${state.leaderboardPage === totalPages ? 'disabled' : ''}>Last &raquo;</button>
+        `;
+    }
+
+    function leaderboardGoPage(page) {
+        state.leaderboardPage = page;
+        renderLeaderboardPage();
+    }
+
+    async function renderLeaderboard() {
+        updateCountdown();
+        const weekStart = state.selectedWeek || getWeekStart();
+        const lb = await getLeaderboard(weekStart);
+        state.leaderboardData = lb.sort((a, b) => b.score - a.score || a.time - b.time);
+        state.leaderboardPage = 1;
+        $('lbTitle').innerHTML = state.selectedWeek
+            ? 'LEADERBOARD <span class="lb-week-range">' + formatWeekLabel(state.selectedWeek) + '</span>'
+            : 'LEADERBOARD';
+        $('lbWeekSelect').value = state.selectedWeek || '';
+        renderLeaderboardPage();
+    }
+
+    function generatePastWeekOptions() {
+        const select = $('lbWeekSelect');
+        const weeks = [];
+        for (let i = 0; i < 12; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1) - i * 7);
+            d.setHours(0, 0, 0, 0);
+            if (d.toISOString() < getWeekStart()) {
+                weeks.push(d.toISOString());
+            }
+        }
+        select.innerHTML = '<option value="">This Week</option>' +
+            weeks.map(ws => `<option value="${ws}">${formatWeekLabel(ws)}</option>`).join('');
+    }
+
+    async function onWeekChange(value) {
+        state.selectedWeek = value || null;
+        renderLeaderboard();
     }
 
     const COUNTRIES = [
@@ -468,8 +616,8 @@
 
     // Start game
     function startGame() {
-        if (state.answeredCount > 0) {
-            addScore(state.savedName || 'Anonymous', state.correctCount, state.elapsedSeconds);
+        if (state.answeredCount > 0 && state.savedName) {
+            addScore(state.savedName, state.correctCount, state.elapsedSeconds);
         }
 
         showScreen('quiz');
@@ -677,7 +825,20 @@
     }
 
     async function saveScore() {
-        const name = $('nameInput').value.trim() || 'Anonymous';
+        const name = $('nameInput').value.trim();
+        if (!name) {
+            alert('Please enter a name.');
+            return;
+        }
+        if (name.toLowerCase() === 'anonymous') {
+            alert('"Anonymous" is not allowed. Please choose a different name.');
+            return;
+        }
+        const unique = await isNameUnique(name);
+        if (!unique) {
+            alert('This name is already on the leaderboard. Please choose a unique name.');
+            return;
+        }
         state.savedName = name;
         await addScore(name, state.correctCount, state.elapsedSeconds);
         renderLeaderboard();
@@ -697,6 +858,7 @@
     // Init
     updateCountdown();
     countdownInterval = setInterval(updateCountdown, 1000);
+    generatePastWeekOptions();
     renderLeaderboard();
 </script>
 </body>
