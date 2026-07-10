@@ -840,6 +840,7 @@
         }
         state.savedName = name;
         await addScore(name, state.correctCount, state.elapsedSeconds);
+        state.savedName = '';
         renderLeaderboard();
         $('nameInput').value = '';
         alert('Score saved!');
