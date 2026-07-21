@@ -1,21 +1,59 @@
 import { test, expect } from '@playwright/test';
 
-async function stubSupabase(page, signUpResult, { mailerAutoconfirm = true } = {}) {
+test('players must authenticate before they can access multiplayer', async ({ page }) => {
+  await stubSupabase(page, { data: { user: null, session: null }, error: null });
+
+  await page.goto('/');
+
+  await expect(page.locator('#auth.active')).toBeVisible();
+  await expect(page.locator('#home.active')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Create Room' })).toHaveCount(0);
+});
+
+test('sign-in unlocks multiplayer with the authenticated username', async ({ page }) => {
+  await stubSupabase(page, { data: { user: null, session: null }, error: null }, {
+    signInResult: {
+      data: { user: { id: 'user-1', user_metadata: { username: 'ada_lovelace' } }, session: { access_token: 'test-token' } },
+      error: null
+    }
+  });
+
+  await page.goto('/');
+  await page.getByLabel('Username').fill('Ada_Lovelace');
+  await page.getByLabel('Password').fill('correct-horse-battery-staple');
+  await page.getByRole('button', { name: 'Sign In' }).click();
+
+  await expect(page.locator('#home.active')).toBeVisible();
+  await expect(page.locator('#playerName')).toHaveValue('ada_lovelace');
+  await expect.poll(() => page.evaluate(() => window.__signInCalls)).toEqual([{
+    email: 'ada_lovelace@players.countryflagquiz.app',
+    password: 'correct-horse-battery-staple'
+  }]);
+});
+
+async function stubSupabase(page, signUpResult, { mailerAutoconfirm = true, signInResult = { data: { user: null, session: null }, error: null }, session = null } = {}) {
   await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }));
   await page.route('**/auth/v1/settings', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ mailer_autoconfirm: mailerAutoconfirm }) }));
   await page.addInitScript((result) => {
     window.__signUpCalls = [];
+    window.__signInCalls = [];
     window.supabase = {
       createClient: () => ({
         auth: {
           signUp: async (request) => {
             window.__signUpCalls.push(request);
-            return result;
-          }
+            return result.signUp;
+          },
+          signInWithPassword: async (request) => {
+            window.__signInCalls.push(request);
+            return result.signIn;
+          },
+          getSession: async () => ({ data: { session: result.session } }),
+          signOut: async () => ({ error: null })
         }
       })
     };
-  }, signUpResult);
+  }, { signUp: signUpResult, signIn: signInResult, session });
 }
 
 test('sign-up submits a canonical username and password to the account service', async ({ page }) => {
@@ -29,8 +67,9 @@ test('sign-up submits a canonical username and password to the account service',
   await page.getByLabel('Password').fill('correct-horse-battery-staple');
   await page.getByRole('button', { name: 'Sign Up' }).click();
 
-  await expect(page.getByText('Account created as ada_lovelace.')).toBeVisible();
-  await expect(page.getByLabel('Player name')).toHaveValue('ada_lovelace');
+  await expect(page.locator('#home.active')).toBeVisible();
+  await expect(page.locator('#accountUsername')).toHaveText('ada_lovelace');
+  await expect(page.locator('#playerName')).toHaveValue('ada_lovelace');
   await expect.poll(() => page.evaluate(() => window.__signUpCalls)).toEqual([{
     email: 'ada_lovelace@players.countryflagquiz.app',
     password: 'correct-horse-battery-staple',
@@ -76,7 +115,7 @@ test('sign-up explains when the backend requires unavailable email confirmation'
   await page.getByRole('button', { name: 'Sign Up' }).click();
 
   await expect(page.locator('#signupError')).toHaveText('Username-only sign-up requires email confirmation to be disabled in Supabase.');
-  await expect(page.getByLabel('Player name')).toHaveValue('');
+  await expect(page.locator('#home.active')).toHaveCount(0);
 });
 
 test('sign-up rejects usernames that are not in the supported format', async ({ page }) => {

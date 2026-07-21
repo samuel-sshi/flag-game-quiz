@@ -17,7 +17,8 @@ const state = {
   hostId: '', hostPublicKey: null, keyPair: null, publicKey: null,
   channel: null, roomStatus: 'lobby', pendingJoin: null, authorized: {},
   lastSeq: {}, sendSeq: 0, quiz: [], scoreboard: {}, index: 0,
-  startedAt: 0, finished: false, answerLocked: false, timer: null
+  startedAt: 0, finished: false, answerLocked: false, timer: null,
+  account: null
 };
 const cryptoReady = createIdentity();
 const $ = (id) => document.getElementById(id);
@@ -25,7 +26,7 @@ const show = (id) => {
   document.querySelectorAll('.screen').forEach((element) => element.classList.remove('active'));
   $(id).classList.add('active');
 };
-const cleanName = () => $('playerName').value.trim().replace(/\s+/g, ' ').slice(0, 20);
+const cleanName = () => String(state.account?.username || '').trim().replace(/\s+/g, ' ').slice(0, 20);
 const cleanCode = () => $('roomCodeInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, ROOM_CODE_LENGTH);
 const safeInt = (value, min = 0, max = Number.MAX_SAFE_INTEGER) => {
   const number = Number(value);
@@ -36,13 +37,15 @@ const formatTime = (seconds) => {
   return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
 };
 function escapeHtml(value) { const element = document.createElement('div'); element.textContent = String(value); return element.innerHTML; }
-function signupCredentials() {
+function accountCredentials() {
   const username = $('signupUsername').value.trim().toLowerCase();
   const password = $('signupPassword').value;
   if (!/^[a-z0-9_]{3,20}$/.test(username)) throw new Error('Username must be 3–20 characters using letters, numbers, or underscores.');
   if (password.length < 8 || password.length > 72) throw new Error('Password must be 8–72 characters.');
   return { username, password };
 }
+function accountEmail(username) { return `${username}@players.countryflagquiz.app`; }
+function setAuthBusy(busy) { $('signupBtn').disabled = busy; $('signinBtn').disabled = busy; }
 async function requirePasswordOnlySignup() {
   try {
     const response = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_ANON_KEY } });
@@ -56,31 +59,63 @@ async function requirePasswordOnlySignup() {
 }
 function signupErrorMessage(error) {
   const message = String(error?.message || error || 'Could not create your account.');
-  return /already|registered|unique|duplicate/i.test(message) ? 'That username is already taken.' : message;
+  if (/already|registered|unique|duplicate/i.test(message)) return 'That username is already taken.';
+  if (/invalid login|invalid credentials/i.test(message)) return 'Incorrect username or password.';
+  return message;
+}
+function authenticatedUsername(user, fallback = '') {
+  const username = String(user?.user_metadata?.username || fallback).trim().toLowerCase();
+  if (!/^[a-z0-9_]{3,20}$/.test(username)) throw new Error('Your account is missing a valid username.');
+  return username;
+}
+function enterAccount(user, fallbackUsername = '') {
+  const username = authenticatedUsername(user, fallbackUsername);
+  state.account = { id: user.id, username };
+  $('playerName').value = username;
+  $('accountUsername').textContent = username;
+  $('signupPassword').value = '';
+  show('home');
 }
 async function signUp() {
-  $('signupError').textContent = '';
-  $('signupMessage').textContent = '';
-  $('signupBtn').disabled = true;
+  $('signupError').textContent = ''; $('signupMessage').textContent = ''; setAuthBusy(true);
   try {
     if (!sb) throw new Error('Account service is unavailable.');
-    const { username, password } = signupCredentials();
+    const { username, password } = accountCredentials();
     await requirePasswordOnlySignup();
-    const { data, error } = await sb.auth.signUp({
-      email: `${username}@players.countryflagquiz.app`,
-      password,
-      options: { data: { username } }
-    });
+    const { data, error } = await sb.auth.signUp({ email: accountEmail(username), password, options: { data: { username } } });
     if (error) throw error;
-    if (!data?.session) throw new Error('Username-only sign-up requires email confirmation to be disabled in Supabase.');
-    $('playerName').value = username;
-    $('signupPassword').value = '';
-    $('signupMessage').textContent = `Account created as ${username}.`;
-  } catch (error) {
-    $('signupError').textContent = signupErrorMessage(error);
-  } finally {
-    $('signupBtn').disabled = false;
+    if (!data?.session || !data.user) throw new Error('Username-only sign-up requires email confirmation to be disabled in Supabase.');
+    enterAccount(data.user, username);
+  } catch (error) { $('signupError').textContent = signupErrorMessage(error); }
+  finally { setAuthBusy(false); }
+}
+async function signIn() {
+  $('signupError').textContent = ''; $('signupMessage').textContent = ''; setAuthBusy(true);
+  try {
+    if (!sb) throw new Error('Account service is unavailable.');
+    const { username, password } = accountCredentials();
+    const { data, error } = await sb.auth.signInWithPassword({ email: accountEmail(username), password });
+    if (error || !data?.user || !data?.session) throw error || new Error('Incorrect username or password.');
+    enterAccount(data.user, username);
+  } catch (error) { $('signupError').textContent = signupErrorMessage(error); }
+  finally { setAuthBusy(false); }
+}
+async function initializeAccount() {
+  if (!sb) return;
+  const { data } = await sb.auth.getSession();
+  if (data?.session?.user) {
+    try { enterAccount(data.session.user); }
+    catch { await sb.auth.signOut(); }
   }
+}
+async function signOut() {
+  await leaveRoom();
+  if (sb) await sb.auth.signOut();
+  state.account = null;
+  $('playerName').value = '';
+  $('signupUsername').value = '';
+  $('signupPassword').value = '';
+  show('auth');
 }
 function canonicalPublicKey(key) {
   return JSON.stringify({ crv: key?.crv || '', kty: key?.kty || '', x: key?.x || '', y: key?.y || '' });
@@ -377,6 +412,7 @@ async function connectRoom(code, name, isHost) {
   show('lobby'); renderPlayers();
 }
 async function createRoom() {
+  if (!state.account) return void show('auth');
   const name = cleanName();
   if (!name) return void ($('homeError').textContent = 'Enter your player name first.');
   $('homeError').textContent = ''; $('createRoomBtn').disabled = true;
@@ -390,6 +426,7 @@ async function createRoom() {
   finally { $('createRoomBtn').disabled = false; }
 }
 async function joinRoom() {
+  if (!state.account) return void show('auth');
   const name = cleanName(); const code = cleanCode();
   if (!name) return void ($('homeError').textContent = 'Enter your player name first.');
   if (code.length !== ROOM_CODE_LENGTH) return void ($('homeError').textContent = `Enter a valid ${ROOM_CODE_LENGTH}-character room code.`);
@@ -461,7 +498,9 @@ async function leaveRoom() {
 }
 
 $('signupBtn').addEventListener('click', signUp);
-$('signupPassword').addEventListener('keydown', (event) => { if (event.key === 'Enter') signUp(); });
+$('signinBtn').addEventListener('click', signIn);
+$('signoutBtn').addEventListener('click', signOut);
+$('signupPassword').addEventListener('keydown', (event) => { if (event.key === 'Enter') signIn(); });
 $('createRoomBtn').addEventListener('click', createRoom);
 $('joinRoomBtn').addEventListener('click', joinRoom);
 $('roomCodeInput').addEventListener('input', (event) => { event.target.value = cleanCode(); });
@@ -469,3 +508,4 @@ $('startGameBtn').addEventListener('click', hostStartGame);
 $('leaveRoomBtn').addEventListener('click', leaveRoom);
 $('resultsLeaveBtn').addEventListener('click', leaveRoom);
 $('rematchBtn').addEventListener('click', () => returnToLobby(true));
+initializeAccount();

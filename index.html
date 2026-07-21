@@ -11,18 +11,24 @@
   <script src="config.js"></script>
 </head>
 <body>
-  <main id="home" class="screen active">
+  <main id="auth" class="screen active">
     <section class="card">
       <h1>COUNTRY <span class="accent">FLAG QUIZ</span></h1>
-      <p class="subtitle">Create a room, invite your friends, and compete live.</p>
-      <div class="divider">CREATE A PLAYER ACCOUNT</div>
-      <div class="field"><label for="signupUsername">Username</label><input id="signupUsername" class="input" minlength="3" maxlength="20" autocomplete="username" placeholder="Unique username"></div>
-      <div class="field"><label for="signupPassword">Password</label><input id="signupPassword" class="input" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="At least 8 characters"></div>
-      <button id="signupBtn" class="btn btn-primary" type="button">Sign Up</button>
+      <p class="subtitle">Sign up or sign in before joining a multiplayer game.</p>
+      <div class="field"><label for="signupUsername">Username</label><input id="signupUsername" class="input" minlength="3" maxlength="20" autocomplete="username" placeholder="Username"></div>
+      <div class="field"><label for="signupPassword">Password</label><input id="signupPassword" class="input" type="password" minlength="8" maxlength="72" autocomplete="current-password" placeholder="Password"></div>
+      <div class="actions"><button id="signupBtn" class="btn btn-primary" type="button">Sign Up</button><button id="signinBtn" class="btn" type="button">Sign In</button></div>
       <p id="signupMessage" class="status" role="status"></p>
       <p id="signupError" class="error" role="alert"></p>
-      <div class="divider">PLAY MULTIPLAYER</div>
-      <div class="field"><label for="playerName">Player name</label><input id="playerName" class="input" maxlength="20" autocomplete="nickname" placeholder="Your name"></div>
+    </section>
+  </main>
+
+  <main id="home" class="screen">
+    <section class="card">
+      <div class="player"><span id="accountUsername">Player</span><button id="signoutBtn" class="btn" type="button">Sign Out</button></div>
+      <h1>COUNTRY <span class="accent">FLAG QUIZ</span></h1>
+      <p class="subtitle">Create a room, invite your friends, and compete live.</p>
+      <input id="playerName" type="hidden">
       <button id="createRoomBtn" class="btn btn-primary" type="button">Create Room</button>
       <div class="divider">OR JOIN A ROOM</div>
       <div class="room-row"><input id="roomCodeInput" class="input" maxlength="8" aria-label="Room code" placeholder="ROOM CODE"><button id="joinRoomBtn" class="btn" type="button">Join Room</button></div>
