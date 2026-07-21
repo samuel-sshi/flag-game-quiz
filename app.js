@@ -343,7 +343,7 @@ function handleRoster(payload) {
   for (const player of payload.players.slice(0, 32)) {
     const clientId = String(player?.clientId || '');
     const name = String(player?.name || '').trim().replace(/\s+/g, ' ').slice(0, 20);
-    if (clientId && name && player?.publicKey) next[clientId] = { name, publicKey: player.publicKey };
+    if (clientId && name && player?.publicKey) next[clientId] = { name, profileId: String(player.profileId || ''), publicKey: player.publicKey };
   }
   if (next[state.hostId]) state.authorized = next;
   renderPlayers();
@@ -364,9 +364,10 @@ function normalizedScoreboard(entries) {
   }
   return next;
 }
-function handleScoreboard(payload) {
+async function handleScoreboard(payload) {
   state.scoreboard = normalizedScoreboard(payload?.entries);
   renderPlayers();
+  if (state.isHost && Object.values(state.scoreboard).every((item) => item.finished)) await finalizeRating();
 }
 async function finalizeRating() {
   if (!state.isHost || state.ratingFinalized || !state.matchId || !window.FlagQuizRatingSubmission) return;
