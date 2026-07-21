@@ -31,9 +31,19 @@
       <p class="subtitle">Create a room, invite your friends, and compete live.</p>
       <input id="playerName" type="hidden">
       <button id="createRoomBtn" class="btn btn-primary" type="button">Create Room</button>
+      <button id="leaderboardBtn" class="btn" type="button">Leaderboard</button>
       <div class="divider">OR JOIN A ROOM</div>
       <div class="room-row"><input id="roomCodeInput" class="input" maxlength="8" aria-label="Room code" placeholder="ROOM CODE"><button id="joinRoomBtn" class="btn" type="button">Join Room</button></div>
       <p id="homeError" class="error" role="alert"></p>
+    </section>
+  </main>
+
+  <main id="leaderboard" class="screen">
+    <section class="card">
+      <h2>Leaderboard</h2>
+      <p id="leaderboardStatus" class="status">Loading rankings…</p>
+      <div id="leaderboardRows"></div>
+      <div class="actions"><button id="leaderboardPreviousBtn" class="btn" type="button">Previous</button><button id="leaderboardNextBtn" class="btn" type="button">Next</button><button id="leaderboardBackBtn" class="btn" type="button">Back</button></div>
     </section>
   </main>
 

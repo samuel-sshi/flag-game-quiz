@@ -18,7 +18,7 @@ const state = {
   channel: null, roomStatus: 'lobby', pendingJoin: null, authorized: {},
   lastSeq: {}, sendSeq: 0, quiz: [], scoreboard: {}, index: 0,
   startedAt: 0, finished: false, answerLocked: false, timer: null,
-  account: null
+  account: null, leaderboardPage: 1, leaderboardTotal: 0
 };
 const cryptoReady = createIdentity();
 const $ = (id) => document.getElementById(id);
@@ -116,6 +116,42 @@ async function signOut() {
   $('signupUsername').value = '';
   $('signupPassword').value = '';
   show('auth');
+}
+function formatLastPlayed(timestamp) {
+  if (!timestamp) return '—';
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
+}
+function leaderboardHtml(rows) {
+  if (!rows.length) return '<p class="status">No rated players yet.</p>';
+  return `<table class="ranking"><thead><tr><th>Rank</th><th>Player</th><th>Elo</th><th>Games</th><th>Last played</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${safeInt(row.rank, 1)}</td><td>${escapeHtml(row.username)}</td><td>${safeInt(row.elo)}</td><td>${safeInt(row.games_played)}</td><td>${escapeHtml(formatLastPlayed(row.last_played_at))}</td></tr>`).join('')}</tbody></table>`;
+}
+async function loadLeaderboard(page = state.leaderboardPage) {
+  if (!sb) return;
+  state.leaderboardPage = Math.max(1, safeInt(page, 1));
+  $('leaderboardStatus').textContent = 'Loading rankings…';
+  $('leaderboardRows').innerHTML = '';
+  try {
+    const { data, error } = await sb.rpc('get_elo_leaderboard', { p_page: state.leaderboardPage, p_page_size: 25 });
+    if (error) throw error;
+    const rows = Array.isArray(data) ? data : [];
+    state.leaderboardTotal = safeInt(rows[0]?.total_players);
+    const maxPage = Math.max(1, Math.ceil(state.leaderboardTotal / 25));
+    $('leaderboardStatus').textContent = state.leaderboardTotal ? `Page ${state.leaderboardPage} of ${maxPage}` : 'No rated players yet.';
+    $('leaderboardRows').innerHTML = leaderboardHtml(rows);
+    $('leaderboardPreviousBtn').disabled = state.leaderboardPage <= 1;
+    $('leaderboardNextBtn').disabled = state.leaderboardPage >= maxPage;
+  } catch (error) {
+    $('leaderboardStatus').textContent = 'Leaderboard is unavailable right now.';
+    $('leaderboardRows').innerHTML = '';
+    $('leaderboardPreviousBtn').disabled = true;
+    $('leaderboardNextBtn').disabled = true;
+  }
+}
+async function showLeaderboard() {
+  if (!state.account) return void show('auth');
+  show('leaderboard');
+  await loadLeaderboard(1);
 }
 function canonicalPublicKey(key) {
   return JSON.stringify({ crv: key?.crv || '', kty: key?.kty || '', x: key?.x || '', y: key?.y || '' });
@@ -502,6 +538,10 @@ $('signinBtn').addEventListener('click', signIn);
 $('signoutBtn').addEventListener('click', signOut);
 $('signupPassword').addEventListener('keydown', (event) => { if (event.key === 'Enter') signIn(); });
 $('createRoomBtn').addEventListener('click', createRoom);
+$('leaderboardBtn').addEventListener('click', showLeaderboard);
+$('leaderboardBackBtn').addEventListener('click', () => show('home'));
+$('leaderboardPreviousBtn').addEventListener('click', () => loadLeaderboard(state.leaderboardPage - 1));
+$('leaderboardNextBtn').addEventListener('click', () => loadLeaderboard(state.leaderboardPage + 1));
 $('joinRoomBtn').addEventListener('click', joinRoom);
 $('roomCodeInput').addEventListener('input', (event) => { event.target.value = cleanCode(); });
 $('startGameBtn').addEventListener('click', hostStartGame);
