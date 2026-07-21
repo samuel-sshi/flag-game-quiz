@@ -15,6 +15,13 @@
     <section class="card">
       <h1>COUNTRY <span class="accent">FLAG QUIZ</span></h1>
       <p class="subtitle">Create a room, invite your friends, and compete live.</p>
+      <div class="divider">CREATE A PLAYER ACCOUNT</div>
+      <div class="field"><label for="signupUsername">Username</label><input id="signupUsername" class="input" minlength="3" maxlength="20" autocomplete="username" placeholder="Unique username"></div>
+      <div class="field"><label for="signupPassword">Password</label><input id="signupPassword" class="input" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="At least 8 characters"></div>
+      <button id="signupBtn" class="btn btn-primary" type="button">Sign Up</button>
+      <p id="signupMessage" class="status" role="status"></p>
+      <p id="signupError" class="error" role="alert"></p>
+      <div class="divider">PLAY MULTIPLAYER</div>
       <div class="field"><label for="playerName">Player name</label><input id="playerName" class="input" maxlength="20" autocomplete="nickname" placeholder="Your name"></div>
       <button id="createRoomBtn" class="btn btn-primary" type="button">Create Room</button>
       <div class="divider">OR JOIN A ROOM</div>

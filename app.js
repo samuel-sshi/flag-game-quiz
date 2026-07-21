@@ -36,6 +36,39 @@ const formatTime = (seconds) => {
   return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
 };
 function escapeHtml(value) { const element = document.createElement('div'); element.textContent = String(value); return element.innerHTML; }
+function signupCredentials() {
+  const username = $('signupUsername').value.trim().toLowerCase();
+  const password = $('signupPassword').value;
+  if (!/^[a-z0-9_]{3,20}$/.test(username)) throw new Error('Username must be 3–20 characters using letters, numbers, or underscores.');
+  if (password.length < 8 || password.length > 72) throw new Error('Password must be 8–72 characters.');
+  return { username, password };
+}
+function signupErrorMessage(error) {
+  const message = String(error?.message || error || 'Could not create your account.');
+  return /already|registered|unique|duplicate/i.test(message) ? 'That username is already taken.' : message;
+}
+async function signUp() {
+  $('signupError').textContent = '';
+  $('signupMessage').textContent = '';
+  $('signupBtn').disabled = true;
+  try {
+    if (!sb) throw new Error('Account service is unavailable.');
+    const { username, password } = signupCredentials();
+    const { error } = await sb.auth.signUp({
+      email: `${username}@players.countryflagquiz.app`,
+      password,
+      options: { data: { username } }
+    });
+    if (error) throw error;
+    $('playerName').value = username;
+    $('signupPassword').value = '';
+    $('signupMessage').textContent = `Account created as ${username}.`;
+  } catch (error) {
+    $('signupError').textContent = signupErrorMessage(error);
+  } finally {
+    $('signupBtn').disabled = false;
+  }
+}
 function canonicalPublicKey(key) {
   return JSON.stringify({ crv: key?.crv || '', kty: key?.kty || '', x: key?.x || '', y: key?.y || '' });
 }
@@ -414,6 +447,8 @@ async function leaveRoom() {
   state.channel = null; state.authorized = {}; state.scoreboard = {}; show('home');
 }
 
+$('signupBtn').addEventListener('click', signUp);
+$('signupPassword').addEventListener('keydown', (event) => { if (event.key === 'Enter') signUp(); });
 $('createRoomBtn').addEventListener('click', createRoom);
 $('joinRoomBtn').addEventListener('click', joinRoom);
 $('roomCodeInput').addEventListener('input', (event) => { event.target.value = cleanCode(); });
