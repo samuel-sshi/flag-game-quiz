@@ -18,7 +18,7 @@ const state = {
   channel: null, roomStatus: 'lobby', pendingJoin: null, authorized: {},
   lastSeq: {}, sendSeq: 0, quiz: [], scoreboard: {}, index: 0,
   startedAt: 0, finished: false, answerLocked: false, timer: null,
-  account: null, leaderboardPage: 1, leaderboardTotal: 0
+  account: null, leaderboardPage: 1, leaderboardTotal: 0, matchId: null, ratingFinalized: false
 };
 const cryptoReady = createIdentity();
 const $ = (id) => document.getElementById(id);
@@ -261,6 +261,7 @@ function rankingPlayers() {
     const authorized = state.authorized[entry.clientId];
     return {
       clientId: entry.clientId,
+      profileId: authorized?.profileId || '',
       name: authorized?.name || 'Player',
       isHost: entry.clientId === state.hostId,
       score: safeInt(entry.score, 0, TOTAL_FLAGS),
@@ -287,10 +288,10 @@ function renderPlayers() {
 }
 async function trackPlayer(status = state.roomStatus) {
   if (!state.channel) return;
-  await state.channel.track({ clientId: state.clientId, publicKey: state.publicKey, isHost: state.isHost, status });
+  await state.channel.track({ clientId: state.clientId, profileId: state.account?.id || '', publicKey: state.publicKey, isHost: state.isHost, status });
 }
 function rosterPayload() {
-  return Object.entries(state.authorized).map(([clientId, player]) => ({ clientId, name: player.name, publicKey: player.publicKey }));
+  return Object.entries(state.authorized).map(([clientId, player]) => ({ clientId, name: player.name, profileId: player.profileId, publicKey: player.publicKey }));
 }
 async function sendRoster() { if (state.isHost) await sendSecure('roster', { players: rosterPayload() }); }
 
@@ -320,7 +321,7 @@ async function handleJoinRequest(envelope) {
   else if (state.roomStatus !== 'lobby') reason = 'This game is already in progress.';
   else if (names.includes(name.toLowerCase())) reason = 'That player name is already in this room.';
   else if (state.authorized[envelope.senderId]) reason = 'This player is already in the room.';
-  if (!reason) state.authorized[envelope.senderId] = { name, publicKey: payload.publicKey };
+  if (!reason) state.authorized[envelope.senderId] = { name, profileId: String(payload.profileId || ''), publicKey: payload.publicKey };
   await sendSecure('join_response', { requestId: payload.requestId, targetId: envelope.senderId, accepted: !reason, reason });
   if (!reason) await sendRoster();
 }
@@ -359,6 +360,17 @@ function handleScoreboard(payload) {
   state.scoreboard = normalizedScoreboard(payload?.entries);
   renderPlayers();
 }
+async function finalizeRating() {
+  if (!state.isHost || state.ratingFinalized || !state.matchId || !window.FlagQuizRatingSubmission) return;
+  const submission = window.FlagQuizRatingSubmission.create({ matchId: state.matchId, roomCode: state.roomCode, players: rankingPlayers() });
+  if (!submission) return;
+  state.ratingFinalized = true;
+  $('ratingStatus').textContent = 'Applying Elo…';
+  const { data, error } = await sb.rpc('finalize_casual_elo_match', submission);
+  if (error) { state.ratingFinalized = false; $('ratingStatus').textContent = 'Elo could not be applied.'; return; }
+  const mine = (data || []).find((row) => row.profile_id === state.account?.id);
+  $('ratingStatus').textContent = mine ? `Elo: ${mine.elo_before} → ${mine.elo_after} (${mine.elo_change >= 0 ? '+' : ''}${mine.elo_change})` : 'Elo updated.';
+}
 async function handleAnswer(senderId, payload) {
   const entry = state.scoreboard[senderId];
   const questionIndex = safeInt(payload?.questionIndex, -1, TOTAL_FLAGS);
@@ -371,6 +383,7 @@ async function handleAnswer(senderId, payload) {
   entry.finished = entry.answered === TOTAL_FLAGS;
   renderPlayers();
   await sendSecure('scoreboard', { entries: Object.values(state.scoreboard) });
+  if (Object.values(state.scoreboard).every((item) => item.finished)) await finalizeRating();
 }
 
 function configureChannel(channel) {
@@ -413,11 +426,11 @@ async function requestToJoin(channel, name) {
     const timeout = setTimeout(() => reject(new Error('The host did not respond.')), 5000);
     state.pendingJoin = { requestId, resolve: (value) => { clearTimeout(timeout); resolve(value); } };
   });
-  await sendSecure('join_request', { requestId, name, publicKey: state.publicKey });
+  await sendSecure('join_request', { requestId, name, profileId: state.account?.id || '', publicKey: state.publicKey });
   const result = await response;
   state.pendingJoin = null;
   if (!result.accepted) throw new Error(result.reason || 'The host rejected this request.');
-  state.authorized[state.clientId] = { name, publicKey: state.publicKey };
+  state.authorized[state.clientId] = { name, profileId: state.account?.id || '', publicKey: state.publicKey };
   await trackPlayer('lobby');
 }
 async function connectRoom(code, name, isHost) {
@@ -428,7 +441,7 @@ async function connectRoom(code, name, isHost) {
   if (isHost) {
     state.hostId = state.clientId;
     state.hostPublicKey = state.publicKey;
-    state.authorized = { [state.clientId]: { name, publicKey: state.publicKey } };
+    state.authorized = { [state.clientId]: { name, profileId: state.account?.id || '', publicKey: state.publicKey } };
   } else {
     state.hostId = '';
     state.hostPublicKey = null;
@@ -477,12 +490,14 @@ async function hostStartGame() {
   state.roomStatus = 'starting'; renderPlayers();
   const quiz = makeQuiz();
   const scoreboard = Object.fromEntries(players.map((player) => [player.clientId, { clientId: player.clientId, score: 0, answered: 0, elapsed: 0, finished: false }]));
-  await sendSecure('game_start', { quiz, startedAt: Date.now() + 700, entries: Object.values(scoreboard) });
+  state.matchId = crypto.randomUUID(); state.ratingFinalized = false;
+  await sendSecure('game_start', { quiz, matchId: state.matchId, startedAt: Date.now() + 700, entries: Object.values(scoreboard) });
 }
 function startQuiz(payload) {
   if (!validQuiz(payload?.quiz) || !Array.isArray(payload?.entries)) return;
   state.quiz = payload.quiz;
   state.scoreboard = normalizedScoreboard(payload.entries);
+  state.matchId = String(payload.matchId || ''); state.ratingFinalized = false;
   state.index = 0; state.startedAt = safeInt(payload.startedAt, Date.now() - 5000, Date.now() + 10000);
   state.finished = false; state.answerLocked = false; state.roomStatus = 'playing';
   trackPlayer('playing'); show('quiz'); renderQuestion(); renderPlayers();
