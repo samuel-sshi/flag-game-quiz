@@ -376,7 +376,7 @@ async function finalizeRating() {
   state.ratingFinalized = true;
   $('ratingStatus').textContent = 'Applying Elo…';
   const { data, error } = await sb.rpc('finalize_casual_elo_match', submission);
-  if (error) { state.ratingFinalized = false; $('ratingStatus').textContent = 'Elo could not be applied.'; return; }
+  if (error) { state.ratingFinalized = false; $('ratingStatus').textContent = `Elo could not be applied: ${error.message}`; return; }
   const mine = (data || []).find((row) => row.profile_id === state.account?.id);
   $('ratingStatus').textContent = mine ? `Elo: ${mine.elo_before} → ${mine.elo_after} (${mine.elo_change >= 0 ? '+' : ''}${mine.elo_change})` : 'Elo updated.';
 }
